@@ -38,7 +38,7 @@ public class Application {
 
     public static void main(String[] argv) throws Exception {
 
-        // Проверим наличия пути в аргументах
+        // Проверим наличие пути в аргументах
         try {
             filename = argv[0];
         } catch (ArrayIndexOutOfBoundsException e){
@@ -58,13 +58,13 @@ public class Application {
         // Ключ для хранения обработчиков файла
         String processors = filename + "-processors";
 
-        // Мапа для хранения результатов и колличество обработчиков
+        // Мапа для хранения результатов и колличества обработчиков
         ChronicleMap<String, Long> resultsMap = ChronicleMap.of(String.class, Long.class)
                 .averageKey(filename)
                 .entries(50_000)
                 .createOrRecoverPersistedTo(new File(tmpfile), true);
 
-        // Если обработчиков нет, до добавить одно обработчика и обнулить результат
+        // Если обработчиков нет, до нужно добавить одного обработчика и обнулить результат
         if(resultsMap.get(processors) == null || resultsMap.get(processors) == 0) {
             resultsMap.put(processors, 1L);
             resultsMap.remove(filename);
