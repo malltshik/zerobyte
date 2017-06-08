@@ -19,20 +19,20 @@ import java.nio.channels.FileLock;
  * Когда весь файл будет обработан все экземпляры должны вывести общее кол-во нулевых бит в файле.
  *
  * Для запуска выполните в корне проекта:
- * mvn clean compile assembly:single && java -jar target/zerobyte-1.0.0-jar-with-dependencies.jar $PATH_TO_FILE
+ * $ mvn clean compile assembly:single && java -jar target/zerobyte-1.0.0-jar-with-dependencies.jar $PATH_TO_FILE
  *
  * Либо проект уже собран, то:
- * java -jar target/zerobyte-1.0.0-jar-with-dependencies.jar /tmp/test.dat
+ * $ java -jar target/zerobyte-1.0.0-jar-with-dependencies.jar /tmp/test.dat
+ *
+ * Создание большого файла с нулевыми байтами:
+ * $ truncate -s 50G /tmp/test.dat
  */
 public class Application {
 
     private static long countOfZeroBytes = 0;
 
-    private static final String processorsPath = System.getProperty("java.io.tmpdir") +
-            System.getProperty("file.separator") + "processors";
-
-    private static final String resultsPath = System.getProperty("java.io.tmpdir") +
-            System.getProperty("file.separator") + "results";
+    private static final String tmpfile = System.getProperty("java.io.tmpdir") +
+            System.getProperty("file.separator") + "zerobyte-tmp-file";
 
     private static String filename;
 
@@ -55,26 +55,23 @@ public class Application {
         System.out.println("Processing file...");
         long start = System.currentTimeMillis();
 
-        // Мапа для хранения результата
+        // Ключ для хранения обработчиков файла
+        String processors = filename + "-processors";
+
+        // Мапа для хранения результатов и колличество обработчиков
         ChronicleMap<String, Long> resultsMap = ChronicleMap.of(String.class, Long.class)
                 .averageKey(filename)
                 .entries(50_000)
-                .createOrRecoverPersistedTo(new File(resultsPath), true);
-
-        // Мапа для хранения колличества обработчиков
-        ChronicleMap<String, Integer> processorsMap = ChronicleMap.of(String.class, Integer.class)
-                .averageKey(filename)
-                .entries(50_000)
-                .createOrRecoverPersistedTo(new File(processorsPath), true);
+                .createOrRecoverPersistedTo(new File(tmpfile), true);
 
         // Если обработчиков нет, до добавить одно обработчика и обнулить результат
-        if(processorsMap.get(filename) == null || processorsMap.get(filename) == 0) {
-            processorsMap.put(filename, 1);
+        if(resultsMap.get(processors) == null || resultsMap.get(processors) == 0) {
+            resultsMap.put(processors, 1L);
             resultsMap.remove(filename);
         }
         // В противном случае, добавить одного обработчика и не трогать результат
         else {
-            processorsMap.put(filename, processorsMap.get(filename) + 1);
+            resultsMap.put(processors, resultsMap.get(processors) + 1);
         }
 
         // Создаем FileChannel к файлу
@@ -113,10 +110,10 @@ public class Application {
                 resultsMap.get(filename) + countOfZeroBytes : countOfZeroBytes);
 
         // Убираем одного обработчика
-        processorsMap.put(filename, processorsMap.get(filename) != null ? processorsMap.get(filename) - 1 : 0);
+        resultsMap.put(processors, resultsMap.get(filename) != null ? resultsMap.get(processors) - 1 : 0);
 
         // Ждем пока обработчиков не останется
-        while (processorsMap.get(filename) != 0){ Thread.sleep(1); }
+        while (resultsMap.get(processors) != 0){ Thread.sleep(1); }
 
         // Выводим результат
         System.out.println("Count of zero bit: " + resultsMap.get(filename));
@@ -124,12 +121,14 @@ public class Application {
 
 
         /**
-         * По сути программа парсит один файл и генерирует еще два. Это наверно не есть хорошо,
-         * но мы получаем возможность работать с мапами, что сильно проще чем какой либо другой формат
+         * Возможность работать с мапой для обработки результатов лучше, чем какой либо другой формат
          * типа properties или json или просто парсить строки.
          *
          * Как еще передать данные между процессами, я не придумал. Была идея с ServerSocket,
          * но ее реализация сложная и затратила бы больше времени.
+         *
+         * Результаты работы по времени при одном обработчике файла 72с на 50Gb файл.
+         * При 5 ~одновременных обработчиках ~20-25c на 50Gb файл
          *
          * Вот как-то так :)
          */
